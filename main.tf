@@ -1,6 +1,6 @@
 resource "aws_instance" "web" {
   ami = "ami_test"
-  instance_type = "t2.small"
+  instance_type = "t3.small"
   description = "Ec2 Instance"
 }
 
@@ -11,7 +11,7 @@ variable "instance_type" {
 }
 
 resource "aws_instance" "web" {
-  ami = data.ami_ami.ubunty.id
+  ami = data.ami_ami.ubuntu.id
   instance_type = var.instance_type
   subnet_id = var.subnet_id
 }
