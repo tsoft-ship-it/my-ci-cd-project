@@ -1,0 +1,56 @@
+# ==============================================================================
+# CONFIGURATION PARAMETERS - Modify variables as required
+# ==============================================================================
+$Territory     = "US"                      # Replace with 2-letter territory code (e.g., US, UK, IN)
+$NewHostName   = "${Territory}SUPDFS01"   # Generates XXSUPDFS01 naming convention
+$AdapterName   = "Ethernet"
+$PrimaryDNS    = "10.10.2.5"
+$SecondaryDNS  = "10.10.2.6"
+$DomainSuffix  = "corp.domain.com"
+$TimeZone      = "Eastern Standard Time"
+
+# ==============================================================================
+# SCRIPT EXECUTION (Run as Administrator)
+# ==============================================================================
+
+Write-Host "Starting System Configuration for Server: $NewHostName..." -ForegroundColor Cyan
+
+# 1. Rename Server Hostname
+Write-Host "Renaming computer to '$NewHostName'..." -ForegroundColor Yellow
+Rename-Computer -NewName $NewHostName -Force
+
+# 2. Disable IPv6 on specified adapter
+Write-Host "Disabling IPv6 on interface '$AdapterName'..." -ForegroundColor Yellow
+Disable-NetAdapterBinding -Name $AdapterName -ComponentID ms_tcpip6 -ErrorAction Stop
+
+# 3. Set Primary and Secondary DNS Servers
+Write-Host "Setting DNS to $PrimaryDNS and $SecondaryDNS..." -ForegroundColor Yellow
+Set-DnsClientServerAddress -InterfaceAlias $AdapterName -ServerAddresses ($PrimaryDNS, $SecondaryDNS)
+
+# 4. Set Connection-Specific Domain Suffix (IPv4 Advanced Properties)
+Write-Host "Configuring DNS Suffix to '$DomainSuffix'..." -ForegroundColor Yellow
+Set-DnsClient -InterfaceAlias $AdapterName -ConnectionSpecificSuffix $DomainSuffix
+
+# 5. Update System Timezone
+Write-Host "Setting Time Zone to '$TimeZone'..." -ForegroundColor Yellow
+Set-TimeZone -Id $TimeZone
+
+# 6. Disable Windows Firewall
+Write-Host "Disabling Windows Firewall across all profiles..." -ForegroundColor Yellow
+Set-NetFirewallProfile -Profile Domain, Private, Public -Enabled False
+
+# 7. Perform Windows Updates
+Write-Host "Checking and installing Windows Updates..." -ForegroundColor Yellow
+if (-not (Get-Module -ListAvailable -Name PSWindowsUpdate)) {
+    Write-Host "Installing PSWindowsUpdate module..." -ForegroundColor Gray
+    Install-Module -Name PSWindowsUpdate -Force -SkipPublisherCheck -Scope AllUsers
+}
+Import-Module PSWindowsUpdate
+Get-WindowsUpdate -AcceptAll -Install -AutoReboot:$false
+
+# 8. Disable Windows Update Service (wuauserv)
+Write-Host "Disabling Windows Update Service (wuauserv)..." -ForegroundColor Yellow
+Stop-Service -Name wuauserv -Force -ErrorAction SilentlyContinue
+Set-Service -Name wuauserv -StartupType Disabled
+
+Write-Host "`nAll operations completed. A reboot is required for hostname changes to take effect." -ForegroundColor Green
