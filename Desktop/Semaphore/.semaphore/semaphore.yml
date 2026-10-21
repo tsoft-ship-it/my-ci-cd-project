@@ -1,0 +1,50 @@
+    version: v1.0
+    name: Docker CI Pipeline
+
+    agent:
+      machine:
+        type: e1-standard-2
+        os_image: ubuntu2204
+
+    blocks:
+      - name: "Build & Lint"
+        task:
+          jobs:
+            - name: "Docker Lint / Validate"
+              commands:
+                - checkout
+                # Optional: Check Dockerfile syntax with Hadolint
+                - docker run --rm -i hadolint/hadolint < Dockerfile
+
+      - name: "Build & Test"
+        task:
+          jobs:
+            - name: "Build & Run Tests in Container"
+              commands:
+                - checkout
+                # Leverage Docker layer caching if available
+                - cache restore docker-cache-$SEMAPHORE_GIT_BRANCH
+                - docker build -t myapp:test --target test . || docker build -t myapp:test .
+                # Run test container
+                - docker run --rm myapp:test npm test # or pytest / go test / etc.
+
+      - name: "Docker Image Publish"
+        task:
+          secrets:
+            - name: dockerhub-credentials
+          jobs:
+            - name: "Build & Push Image"
+              commands:
+                - checkout
+                # Authenticate to Docker Registry
+                - echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
+                # Build production image
+                - export IMAGE_TAG=$SEMAPHORE_WORKFLOW_ID
+                - docker build -t "$DOCKER_USERNAME/myapp:$IMAGE_TAG" -t "$DOCKER_USERNAME/myapp:latest" .
+                # Push only on main/master branch
+                - |
+                  if [ "$SEMAPHORE_GIT_BRANCH" = "main" ]; then
+                    docker push "$DOCKER_USERNAME/myapp:$IMAGE_TAG"
+                    docker push "$DOCKER_USERNAME/myapp:latest"
+                  fi
+  ──────
